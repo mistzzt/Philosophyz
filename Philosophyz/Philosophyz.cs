@@ -64,7 +64,7 @@ namespace Philosophyz
 			if (PzRegions.PzRegions.All(p => p.Id != args.Region.ID))
 				return;
 
-			//
+			PzRegions.RemoveRegion(args.Region.ID);
 		}
 
 		private void OnRegionLeft(RegionHooks.RegionLeftEventArgs args)

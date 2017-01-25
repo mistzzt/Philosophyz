@@ -76,6 +76,97 @@ namespace Philosophyz
 			}
 		}
 
+		public void AddRegion(int id, PlayerData data)
+		{
+			if (PzRegions.All(p => p.Id != id))
+				AddRegionInternal(id, data);
+			else
+				UpdateRegion(id, data);
+		}
+
+		public void RemoveRegion(int id)
+		{
+			PzRegions.RemoveAll(p => p.Id == id);
+			try
+			{
+				_database.Query("DELETE FROM PzRegions WHERE Region=@0;", id);
+			}
+			catch (Exception ex)
+			{
+				TShock.Log.Error(ex.ToString());
+			}
+		}
+
+		private void UpdateRegion(int id, PlayerData playerData)
+		{
+			try
+			{
+				_database.Query(
+					"UPDATE PzRegions SET Health = @0, MaxHealth = @1, Mana = @2, MaxMana = @3, Inventory = @4, spawnX = @6, spawnY = @7, hair = @8, hairDye = @9, hairColor = @10, pantsColor = @11, shirtColor = @12, underShirtColor = @13, shoeColor = @14, hideVisuals = @15, skinColor = @16, eyeColor = @17, questsCompleted = @18, skinVariant = @19, extraSlot = @20 WHERE Region = @5;",
+					playerData.health,
+					playerData.maxHealth,
+					playerData.mana,
+					playerData.maxMana,
+					string.Join("~", playerData.inventory),
+					id,
+					-1,//player.TPlayer.SpawnX,
+					-1,//player.TPlayer.SpawnY,
+					-1,//player.TPlayer.hair,
+					-1,//player.TPlayer.hairDye,
+					-1,//TShock.Utils.EncodeColor(player.TPlayer.hairColor),
+					-1,//TShock.Utils.EncodeColor(player.TPlayer.pantsColor),
+					-1,//.Utils.EncodeColor(player.TPlayer.shirtColor),
+					-1,//TShock.Utils.EncodeColor(player.TPlayer.underShirtColor),
+					-1,//TShock.Utils.EncodeColor(player.TPlayer.shoeColor),
+					-1,//TShock.Utils.EncodeBoolArray(player.TPlayer.hideVisual),
+					-1,//.Utils.EncodeColor(player.TPlayer.skinColor),
+					-1,//TShock.Utils.EncodeColor(player.TPlayer.eyeColor),
+					-1,//player.TPlayer.anglerQuestsFinished,
+					-1,//player.TPlayer.skinVariant,
+					-1//player.TPlayer.extraAccessory ? 1 : 0
+				);
+			}
+			catch (Exception ex)
+			{
+				TShock.Log.Error(ex.ToString());
+			}
+		}
+
+		private void AddRegionInternal(int id, PlayerData playerData)
+		{
+			try
+			{
+				_database.Query(
+					"INSERT INTO PzRegions(Region, Health, MaxHealth, Mana, MaxMana, Inventory, extraSlot, spawnX, spawnY, skinVariant, hair, hairDye, hairColor, pantsColor, shirtColor, underShirtColor, shoeColor, hideVisuals, skinColor, eyeColor, questsCompleted) VALUES(@0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12, @13, @14, @15, @16, @17, @18, @19, @20); ",
+					id,
+					playerData.health,
+					playerData.maxHealth,
+					playerData.mana,
+					playerData.maxMana,
+					string.Join("~", playerData.inventory),
+					playerData.extraSlot,
+					-1, //player.TPlayer.SpawnX,
+					-1, //player.TPlayer.SpawnY,
+					-1, //player.TPlayer.skinVariant,
+					-1, //player.TPlayer.hair,
+					-1, //player.TPlayer.hairDye,
+					-1, //TShock.Utils.EncodeColor(player.TPlayer.hairColor),
+					-1, //TShock.Utils.EncodeColor(player.TPlayer.pantsColor),
+					-1, //TShock.Utils.EncodeColor(player.TPlayer.shirtColor),
+					-1, //TShock.Utils.EncodeColor(player.TPlayer.underShirtColor),
+					-1, //TShock.Utils.EncodeColor(player.TPlayer.shoeColor),
+					-1, //TShock.Utils.EncodeBoolArray(player.TPlayer.hideVisual),
+					-1, //TShock.Utils.EncodeColor(player.TPlayer.skinColor),
+					-1, //TShock.Utils.EncodeColor(player.TPlayer.eyeColor),
+					-1  //player.TPlayer.anglerQuestsFinished);
+				);
+			}
+			catch (Exception ex)
+			{
+				TShock.Log.Error(ex.ToString());
+			}
+		}
+
 		private static PlayerData Read(QueryResult reader)
 		{
 			var inventory = reader.Get<string>("Inventory").Split('~').Select(NetItem.Parse).ToList();
