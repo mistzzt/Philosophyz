@@ -34,10 +34,42 @@ namespace Philosophyz
 			ServerApi.Hooks.GameInitialize.Register(this, OnInit);
 			ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
 			ServerApi.Hooks.NetGreetPlayer.Register(this, OnGreet);
+			ServerApi.Hooks.ServerLeave.Register(this, OnLeave);
 
 			RegionHooks.RegionEntered += OnRegionEntered;
 			RegionHooks.RegionLeft += OnRegionLeft;
 			RegionHooks.RegionDeleted += OnRegionDeleted;
+		}
+
+		private static void OnLeave(LeaveEventArgs args)
+		{
+			if (args.Who < 0 || args.Who > Main.maxNetPlayers)
+				return;
+
+			var player = TShock.Players[args.Who];
+
+			if (player == null)
+				return;
+
+			if (!player.GetData<bool>(InRegion))
+				return;
+
+			var data = player.GetData<PlayerData>(OriginData);
+			var ssc = Main.ServerSideCharacter;
+
+			if (!ssc)
+			{
+				Main.ServerSideCharacter = true;
+				player.SendData(PacketTypes.WorldInfo);
+			}
+
+			data?.RestoreCharacter(player);
+
+			if (!ssc)
+			{
+				Main.ServerSideCharacter = false;
+				player.SendData(PacketTypes.WorldInfo);
+			}
 		}
 
 		private static void OnGreet(GreetPlayerEventArgs args)
