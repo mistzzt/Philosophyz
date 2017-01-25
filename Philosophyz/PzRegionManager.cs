@@ -97,6 +97,11 @@ namespace Philosophyz
 			}
 		}
 
+		public PzRegion GetRegionById(int id)
+		{
+			return PzRegions.Single(p => p.Id == id);
+		}
+
 		private void UpdateRegion(int id, PlayerData playerData)
 		{
 			try
@@ -125,6 +130,7 @@ namespace Philosophyz
 					-1,//player.TPlayer.skinVariant,
 					-1//player.TPlayer.extraAccessory ? 1 : 0
 				);
+				GetRegionById(id).PlayerData = playerData;
 			}
 			catch (Exception ex)
 			{
@@ -160,6 +166,11 @@ namespace Philosophyz
 					-1, //TShock.Utils.EncodeColor(player.TPlayer.eyeColor),
 					-1  //player.TPlayer.anglerQuestsFinished);
 				);
+				PzRegions.Add(new PzRegion
+				{
+					Id = id,
+					PlayerData = playerData
+				});
 			}
 			catch (Exception ex)
 			{

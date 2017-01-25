@@ -87,7 +87,7 @@ namespace Philosophyz
 			if (!args.Player.GetData<bool>(InRegion))
 				return;
 
-			// send origin data
+			Change(args.Player, args.Player.GetData<PlayerData>(OriginData));
 		}
 
 		private void OnRegionEntered(RegionHooks.RegionEnteredEventArgs args)
@@ -103,8 +103,8 @@ namespace Philosophyz
 
 			args.Player.SetData(OriginData, data);
 			args.Player.SetData(InRegion, true);
-			
-			// send region data
+
+			Change(args.Player, PzRegions.GetRegionById(args.Region.ID).PlayerData);
 		}
 
 		private static void ToggleBypass(CommandArgs args)
@@ -202,7 +202,7 @@ namespace Philosophyz
 						"list [页码]",
 						"help [页码]"
 					};
-					PaginationTools.SendPage(args.Player, pageNumber, PaginationTools.BuildLinesFromTerms(help),
+					PaginationTools.SendPage(args.Player, pageNumber, help,
 						new PaginationTools.Settings
 						{
 							HeaderFormat = "应用区域指令帮助 ({0}/{1}):",
@@ -213,6 +213,25 @@ namespace Philosophyz
 				default:
 					args.Player.SendErrorMessage("语法无效! 键入 /pz help 以获取帮助.");
 					return;
+			}
+		}
+
+		private static void Change(TSPlayer player, PlayerData data)
+		{
+			var ssc = Main.ServerSideCharacter;
+
+			if (!ssc)
+			{
+				Main.ServerSideCharacter = true;
+				player.SendData(PacketTypes.WorldInfo);
+			}
+
+			data.RestoreCharacter(player);
+
+			if (!ssc)
+			{
+				Main.ServerSideCharacter = false;
+				player.SendData(PacketTypes.WorldInfo);
 			}
 		}
 	}
