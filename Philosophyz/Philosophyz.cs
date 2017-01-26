@@ -35,10 +35,32 @@ namespace Philosophyz
 			ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
 			ServerApi.Hooks.NetGreetPlayer.Register(this, OnGreet);
 			ServerApi.Hooks.ServerLeave.Register(this, OnLeave);
+			ServerApi.Hooks.NetSendData.Register(this, OnSendData);
 
 			RegionHooks.RegionEntered += OnRegionEntered;
 			RegionHooks.RegionLeft += OnRegionLeft;
 			RegionHooks.RegionDeleted += OnRegionDeleted;
+		}
+
+		/// <summary>
+		/// 如果WorldInfo发送时，Inregion=true则取消发送
+		/// 所以发送前，inregion要为false
+		/// </summary>
+		/// <param name="args"></param>
+		private static void OnSendData(SendDataEventArgs args)
+		{
+			if (args.MsgId != PacketTypes.WorldInfo)
+				return;
+
+			var player = TShock.Players.ElementAtOrDefault(args.remoteClient);
+
+			if (player == null)
+				return;
+
+			if (!player.GetData<bool>(InRegion))
+				return;
+
+			args.Handled = true;
 		}
 
 		private static void OnLeave(LeaveEventArgs args)
@@ -121,6 +143,8 @@ namespace Philosophyz
 				return;
 
 			Change(args.Player, args.Player.GetData<PlayerData>(OriginData));
+			args.Player.SetData(InRegion, false);
+			args.Player.SendData(PacketTypes.WorldInfo); // 取消本地云存档状态
 		}
 
 		private void OnRegionEntered(RegionHooks.RegionEnteredEventArgs args)
@@ -139,9 +163,9 @@ namespace Philosophyz
 			data.CopyCharacter(args.Player);
 
 			args.Player.SetData(OriginData, data);
-			args.Player.SetData(InRegion, true);
 
 			Change(args.Player, region.GetDefaultData());
+			args.Player.SetData(InRegion, true); // 调换位置，因为发WorldInfo有判断
 		}
 
 		private static void ToggleBypass(CommandArgs args)
@@ -190,10 +214,13 @@ namespace Philosophyz
 				origin.CopyCharacter(args.Player);
 
 				args.Player.SetData(OriginData, origin);
-				args.Player.SetData(InRegion, true);
 			}
 
+			args.Player.SetData(InRegion, false); // 为了发送数据包
+
 			Change(args.Player, data);
+
+			args.Player.SetData(InRegion, true); // 调换位置，因为发WorldInfo有判断
 
 			args.Player.SendInfoMessage("当前人物切换为: {0}", select);
 		}
@@ -418,7 +445,6 @@ namespace Philosophyz
 				if (!ssc)
 				{
 					Main.ServerSideCharacter = false;
-					player.SendData(PacketTypes.WorldInfo);
 				}
 			}
 		}
