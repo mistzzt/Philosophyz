@@ -55,7 +55,7 @@ namespace Philosophyz
 
 			var table = new SqlTable("PzRegions",
 									 new SqlColumn("Region", MySqlDbType.Int32) { Primary = true },
-									 new SqlColumn("Default", MySqlDbType.VarChar, 10)
+									 new SqlColumn("DefaultChar", MySqlDbType.VarChar, 10)
 			);
 
 			var charsTable = new SqlTable("PzChars",
@@ -105,7 +105,7 @@ namespace Philosophyz
 					var region = new PzRegion
 					{
 						Id = id,
-						Default = reader.Get<string>("Default"),
+						Default = reader.Get<string>("DefaultChar"),
 						PlayerDatas = ReadDatas(id)
 					};
 
@@ -284,7 +284,7 @@ namespace Philosophyz
 
 			try
 			{
-				_database.Query("UPDATE PzRegions SET Default = @0 WHERE Region = @1", name, id);
+				_database.Query("UPDATE PzRegions SET DefaultChar = @0 WHERE Region = @1", name, id);
 			}
 			catch (Exception ex)
 			{

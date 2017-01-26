@@ -216,6 +216,12 @@ namespace Philosophyz
 					var name = args.Parameters[2];
 					var playerName = args.Parameters.ElementAtOrDefault(3);
 
+					if (name.Length > 10)
+					{
+						args.Player.SendErrorMessage("存档名的长度不能超过10!");
+						return;
+					}
+
 					var region = TShock.Regions.GetRegionByName(regionName);
 					if (region == null)
 					{
