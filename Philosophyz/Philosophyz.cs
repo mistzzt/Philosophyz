@@ -194,6 +194,12 @@ namespace Philosophyz
 				return;
 			}
 
+			if (args.Player.CurrentRegion == null)
+			{
+				args.Player.SendInfoMessage("你可能在假地球上!");
+				return;
+			}
+
 			var region = PzRegions.GetRegionById(args.Player.CurrentRegion.ID);
 			if (region == null)
 			{
