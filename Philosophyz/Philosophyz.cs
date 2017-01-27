@@ -1,7 +1,10 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using Terraria;
+using Terraria.GameContent.Events;
+using Terraria.Social;
 using TerrariaApi.Server;
 using TShockAPI;
 using TShockAPI.Hooks;
@@ -34,7 +37,6 @@ namespace Philosophyz
 			ServerApi.Hooks.GameInitialize.Register(this, OnInit);
 			ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
 			ServerApi.Hooks.NetGreetPlayer.Register(this, OnGreet);
-			ServerApi.Hooks.ServerLeave.Register(this, OnLeave);
 			ServerApi.Hooks.NetSendData.Register(this, OnSendData);
 
 			RegionHooks.RegionEntered += OnRegionEntered;
@@ -43,8 +45,7 @@ namespace Philosophyz
 		}
 
 		/// <summary>
-		/// 如果WorldInfo发送时，Inregion=true则取消发送
-		/// 所以发送前，inregion要为false
+		/// 根据worldinfo发送时的状态判定是否需要fakessc
 		/// </summary>
 		/// <param name="args"></param>
 		private static void OnSendData(SendDataEventArgs args)
@@ -57,48 +58,23 @@ namespace Philosophyz
 			if (player == null)
 				return;
 
-			if (!player.GetData<bool>(InRegion))
-				return;
+			// 如果在区域内，收到了来自别的插件的发送请求
+			// 保持默认 ssc = true 并发送(也就是不需要改什么)
+			// 如果在区域外，收到了来自别的插件的发送请求
+			// 需要 fake ssc = false 并发送
+			SendInfo(player, player.GetData<bool>(InRegion));
 
 			args.Handled = true;
 		}
 
-		private static void OnLeave(LeaveEventArgs args)
+		private static void OnGreet(GreetPlayerEventArgs args)
 		{
-			if (args.Who < 0 || args.Who > Main.maxNetPlayers)
-				return;
-
-			var player = TShock.Players[args.Who];
-
+			var player = TShock.Players.ElementAtOrDefault(args.Who);
 			if (player == null)
 				return;
 
-			if (!player.GetData<bool>(InRegion))
-				return;
-
-			var data = player.GetData<PlayerData>(OriginData);
-			var ssc = Main.ServerSideCharacter;
-
-			if (!ssc)
-			{
-				Main.ServerSideCharacter = true;
-				player.SendData(PacketTypes.WorldInfo);
-			}
-
-			data?.RestoreCharacter(player);
-
-			if (!ssc)
-			{
-				Main.ServerSideCharacter = false;
-				player.SendData(PacketTypes.WorldInfo);
-			}
-		}
-
-		private static void OnGreet(GreetPlayerEventArgs args)
-		{
-			var player = TShock.Players[args.Who];
-
-			player?.SetData(BypassStatus, false);
+			player.SetData(BypassStatus, false);
+			SendInfo(player, false);
 		}
 
 		private void OnPostInit(EventArgs args)
@@ -108,6 +84,12 @@ namespace Philosophyz
 
 		private void OnInit(EventArgs args)
 		{
+			if (!TShock.ServerSideCharacterConfig.Enabled)
+			{
+				TShock.Log.ConsoleError("[Pz] 未开启SSC! 你可能选错了插件.");
+				throw new NotSupportedException("该插件不支持非SSC模式运行!");
+			}
+
 			Commands.ChatCommands.Add(new Command("pz.admin.manage", PzCmd, "pz"));
 			Commands.ChatCommands.Add(new Command("pz.admin.toggle", ToggleBypass, "pztoggle"));
 			Commands.ChatCommands.Add(new Command("pz.select", PzSelect, "pzselect"));
@@ -134,6 +116,10 @@ namespace Philosophyz
 			PzRegions.RemoveRegion(args.Region.ID);
 		}
 
+		/// <summary>
+		/// 离开区域时执行恢复存档并fakessc=false
+		/// </summary>
+		/// <param name="args"></param>
 		private void OnRegionLeft(RegionHooks.RegionLeftEventArgs args)
 		{
 			if (!PzRegions.PzRegions.Exists(p => p.Id == args.Region.ID))
@@ -144,9 +130,15 @@ namespace Philosophyz
 
 			Change(args.Player, args.Player.GetData<PlayerData>(OriginData));
 			args.Player.SetData(InRegion, false);
-			args.Player.SendData(PacketTypes.WorldInfo); // 取消本地云存档状态
+
+			SendInfo(args.Player, false);
 		}
 
+		/// <summary>
+		/// 进入区域时fakessc=true
+		/// 若有默认存档则开始更换
+		/// </summary>
+		/// <param name="args"></param>
 		private void OnRegionEntered(RegionHooks.RegionEnteredEventArgs args)
 		{
 			var region = PzRegions.GetRegionById(args.Region.ID);
@@ -156,6 +148,8 @@ namespace Philosophyz
 			if (args.Player.GetData<bool>(BypassStatus))
 				return;
 
+			SendInfo(args.Player, true); // 若有指令变换存档
+
 			if (!region.HasDefault)
 				return;
 
@@ -163,7 +157,7 @@ namespace Philosophyz
 			data.CopyCharacter(args.Player);
 
 			args.Player.SetData(OriginData, data);
-
+			
 			Change(args.Player, region.GetDefaultData());
 			args.Player.SetData(InRegion, true); // 调换位置，因为发WorldInfo有判断
 		}
@@ -214,7 +208,7 @@ namespace Philosophyz
 				return;
 			}
 
-			if (!args.Player.GetData<bool>(InRegion))
+			if (!args.Player.GetData<bool>(InRegion)) // 是否备份存档判断
 			{
 				var origin = new PlayerData(args.Player);
 				origin.CopyCharacter(args.Player);
@@ -222,11 +216,9 @@ namespace Philosophyz
 				args.Player.SetData(OriginData, origin);
 			}
 
-			args.Player.SetData(InRegion, false); // 为了发送数据包
-
 			Change(args.Player, data);
 
-			args.Player.SetData(InRegion, true); // 调换位置，因为发WorldInfo有判断
+			args.Player.SetData(InRegion, true);
 
 			args.Player.SendInfoMessage("当前人物切换为: {0}", select);
 		}
@@ -434,25 +426,134 @@ namespace Philosophyz
 
 		private static void Change(TSPlayer player, PlayerData data)
 		{
-			var ssc = Main.ServerSideCharacter;
+			data.RestoreCharacter(player);
+		}
 
-			try
-			{
-				if (!ssc)
-				{
-					Main.ServerSideCharacter = true;
-					player.SendData(PacketTypes.WorldInfo);
-				}
+		/// <summary>
+		/// 向玩家发送ssc状态
+		/// </summary>
+		/// <param name="player">玩家</param>
+		/// <param name="ssc">状态</param>
+		private static void SendInfo(TSPlayer player, bool ssc)
+		{
+			var memoryStream = new MemoryStream();
+			var binaryWriter = new BinaryWriter(memoryStream);
+			var position = binaryWriter.BaseStream.Position;
+			binaryWriter.BaseStream.Position += 2L;
+			binaryWriter.Write((byte)PacketTypes.WorldInfo);
 
-				data.RestoreCharacter(player);
-			}
-			finally
+			binaryWriter.Write((int)Main.time);
+			BitsByte bb3 = 0;
+			bb3[0] = Main.dayTime;
+			bb3[1] = Main.bloodMoon;
+			bb3[2] = Main.eclipse;
+			binaryWriter.Write(bb3);
+			binaryWriter.Write((byte)Main.moonPhase);
+			binaryWriter.Write((short)Main.maxTilesX);
+			binaryWriter.Write((short)Main.maxTilesY);
+			binaryWriter.Write((short)Main.spawnTileX);
+			binaryWriter.Write((short)Main.spawnTileY);
+			binaryWriter.Write((short)Main.worldSurface);
+			binaryWriter.Write((short)Main.rockLayer);
+			binaryWriter.Write(Main.worldID);
+			binaryWriter.Write(Main.worldName);
+			binaryWriter.Write(Main.ActiveWorldFileData.UniqueId.ToString());
+			binaryWriter.Write((byte)Main.moonType);
+			binaryWriter.Write((byte)WorldGen.treeBG);
+			binaryWriter.Write((byte)WorldGen.corruptBG);
+			binaryWriter.Write((byte)WorldGen.jungleBG);
+			binaryWriter.Write((byte)WorldGen.snowBG);
+			binaryWriter.Write((byte)WorldGen.hallowBG);
+			binaryWriter.Write((byte)WorldGen.crimsonBG);
+			binaryWriter.Write((byte)WorldGen.desertBG);
+			binaryWriter.Write((byte)WorldGen.oceanBG);
+			binaryWriter.Write((byte)Main.iceBackStyle);
+			binaryWriter.Write((byte)Main.jungleBackStyle);
+			binaryWriter.Write((byte)Main.hellBackStyle);
+			binaryWriter.Write(Main.windSpeedSet);
+			binaryWriter.Write((byte)Main.numClouds);
+			for (var k = 0; k < 3; k++)
 			{
-				if (!ssc)
-				{
-					Main.ServerSideCharacter = false;
-				}
+				binaryWriter.Write(Main.treeX[k]);
 			}
+			for (var l = 0; l < 4; l++)
+			{
+				binaryWriter.Write((byte)Main.treeStyle[l]);
+			}
+			for (var m = 0; m < 3; m++)
+			{
+				binaryWriter.Write(Main.caveBackX[m]);
+			}
+			for (var n = 0; n < 4; n++)
+			{
+				binaryWriter.Write((byte)Main.caveBackStyle[n]);
+			}
+			if (!Main.raining)
+			{
+				Main.maxRaining = 0f;
+			}
+			binaryWriter.Write(Main.maxRaining);
+			BitsByte bb4 = 0;
+			bb4[0] = WorldGen.shadowOrbSmashed;
+			bb4[1] = NPC.downedBoss1;
+			bb4[2] = NPC.downedBoss2;
+			bb4[3] = NPC.downedBoss3;
+			bb4[4] = Main.hardMode;
+			bb4[5] = NPC.downedClown;
+			bb4[6] = ssc;
+			bb4[7] = NPC.downedPlantBoss;
+			binaryWriter.Write(bb4);
+			BitsByte bb5 = 0;
+			bb5[0] = NPC.downedMechBoss1;
+			bb5[1] = NPC.downedMechBoss2;
+			bb5[2] = NPC.downedMechBoss3;
+			bb5[3] = NPC.downedMechBossAny;
+			bb5[4] = Main.cloudBGActive >= 1f;
+			bb5[5] = WorldGen.crimson;
+			bb5[6] = Main.pumpkinMoon;
+			bb5[7] = Main.snowMoon;
+			binaryWriter.Write(bb5);
+			BitsByte bb6 = 0;
+			bb6[0] = Main.expertMode;
+			bb6[1] = Main.fastForwardTime;
+			bb6[2] = Main.slimeRain;
+			bb6[3] = NPC.downedSlimeKing;
+			bb6[4] = NPC.downedQueenBee;
+			bb6[5] = NPC.downedFishron;
+			bb6[6] = NPC.downedMartians;
+			bb6[7] = NPC.downedAncientCultist;
+			binaryWriter.Write(bb6);
+			BitsByte bb7 = 0;
+			bb7[0] = NPC.downedMoonlord;
+			bb7[1] = NPC.downedHalloweenKing;
+			bb7[2] = NPC.downedHalloweenTree;
+			bb7[3] = NPC.downedChristmasIceQueen;
+			bb7[4] = NPC.downedChristmasSantank;
+			bb7[5] = NPC.downedChristmasTree;
+			bb7[6] = NPC.downedGolemBoss;
+			bb7[7] = BirthdayParty.PartyIsUp;
+			binaryWriter.Write(bb7);
+			BitsByte bb8 = 0;
+			bb8[0] = NPC.downedPirates;
+			bb8[1] = NPC.downedFrost;
+			bb8[2] = NPC.downedGoblins;
+			bb8[3] = Sandstorm.Happening;
+			bb8[4] = DD2Event.Ongoing;
+			bb8[5] = DD2Event.DownedInvasionT1;
+			bb8[6] = DD2Event.DownedInvasionT2;
+			bb8[7] = DD2Event.DownedInvasionT3;
+			binaryWriter.Write(bb8);
+			binaryWriter.Write((sbyte)Main.invasionType);
+			binaryWriter.Write(SocialAPI.Network != null ? SocialAPI.Network.GetLobbyId() : 0UL);
+			binaryWriter.Write(Sandstorm.IntendedSeverity);
+
+			var currentPosition = (int)binaryWriter.BaseStream.Position;
+			binaryWriter.BaseStream.Position = position;
+			binaryWriter.Write((short)currentPosition);
+			binaryWriter.BaseStream.Position = currentPosition;
+			var data = memoryStream.ToArray();
+
+			player.SendRawData(data);
 		}
 	}
 }
