@@ -56,15 +56,30 @@ namespace Philosophyz
 			var player = TShock.Players.ElementAtOrDefault(args.remoteClient);
 
 			if (player == null)
-				return;
+			{
+				if (args.remoteClient == -1)
+				{
+					var onData = PackInfo(true);
+					var offData = PackInfo(false);
 
-			// 如果在区域内，收到了来自别的插件的发送请求
-			// 保持默认 ssc = true 并发送(也就是不需要改什么)
-			// 如果在区域外，收到了来自别的插件的发送请求
-			// 需要 fake ssc = false 并发送
-			SendInfo(player, player.GetData<bool>(InRegion));
+					foreach (var tsPlayer in TShock.Players.Where(p => p?.Active == true))
+					{
+						tsPlayer.SendRawData(tsPlayer.GetData<bool>(InRegion) ? onData : offData);
+					}
 
-			args.Handled = true;
+					args.Handled = true;
+				}
+			}
+			else
+			{
+				// 如果在区域内，收到了来自别的插件的发送请求
+				// 保持默认 ssc = true 并发送(也就是不需要改什么)
+				// 如果在区域外，收到了来自别的插件的发送请求
+				// 需要 fake ssc = false 并发送
+				SendInfo(player, player.GetData<bool>(InRegion));
+
+				args.Handled = true;
+			}
 		}
 
 		private static void OnGreet(GreetPlayerEventArgs args)
@@ -430,11 +445,10 @@ namespace Philosophyz
 		}
 
 		/// <summary>
-		/// 向玩家发送ssc状态
+		/// ssc状态写入
 		/// </summary>
-		/// <param name="player">玩家</param>
 		/// <param name="ssc">状态</param>
-		private static void SendInfo(TSPlayer player, bool ssc)
+		private static byte[] PackInfo(bool ssc)
 		{
 			var memoryStream = new MemoryStream();
 			var binaryWriter = new BinaryWriter(memoryStream);
@@ -553,7 +567,14 @@ namespace Philosophyz
 			binaryWriter.BaseStream.Position = currentPosition;
 			var data = memoryStream.ToArray();
 
-			player.SendRawData(data);
+			binaryWriter.Close();
+
+			return data;
+		}
+
+		private static void SendInfo(TSPlayer player, bool ssc)
+		{
+			player.SendRawData(PackInfo(ssc));
 		}
 	}
 }
