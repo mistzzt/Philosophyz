@@ -16,9 +16,9 @@ namespace Philosophyz
 	{
 		private const string BypassStatus = "pz-bp";
 
-		private const string OriginData = "pz-pre-dt";
+		public const string OriginData = "pz-pre-dt";
 
-		private const string InRegion = "pz-in-reg";
+		public const string InRegion = "pz-in-reg";
 
 		public override string Name => Assembly.GetExecutingAssembly().GetName().Name;
 
@@ -28,7 +28,10 @@ namespace Philosophyz
 
 		public override Version Version => Assembly.GetExecutingAssembly().GetName().Version;
 
-		public Philosophyz(Main game) : base(game) { }
+		public Philosophyz(Main game) : base(game)
+		{
+			Order = 0; // 最早
+		}
 
 		internal PzRegionManager PzRegions;
 
@@ -575,6 +578,27 @@ namespace Philosophyz
 		private static void SendInfo(TSPlayer player, bool ssc)
 		{
 			player.SendRawData(PackInfo(ssc));
+		}
+
+		/// <summary>
+		/// 变换存档
+		/// 需要区域被设定。这也就是说，ssc是开着的
+		/// </summary>
+		/// <param name="player">玩家引用</param>
+		/// <param name="data">存档信息</param>
+		public static void ChangeCharacter(TSPlayer player, PlayerData data)
+		{
+			if (!player.GetData<bool>(InRegion)) // 是否备份存档判断
+			{
+				var origin = new PlayerData(player);
+				origin.CopyCharacter(player);
+
+				player.SetData(OriginData, origin);
+			}
+
+			Change(player, data);
+
+			player.SetData(InRegion, true);
 		}
 	}
 }
