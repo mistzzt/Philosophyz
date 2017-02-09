@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using OTAPI;
 using Terraria;
 using Terraria.GameContent.Events;
 using Terraria.Social;
@@ -14,6 +15,8 @@ namespace Philosophyz
 	[ApiVersion(2, 0)]
 	public class Philosophyz : TerrariaPlugin
 	{
+		public delegate HookResult PzSendData(TSPlayer player, int remoteClient);
+
 		private const string BypassStatus = "pz-bp";
 
 		public const string OriginData = "pz-pre-dt";
@@ -28,6 +31,10 @@ namespace Philosophyz
 
 		public override Version Version => Assembly.GetExecutingAssembly().GetName().Version;
 
+		public static PzSendData PreSendData;
+
+		public static PzSendData PostSendData;
+
 		public Philosophyz(Main game) : base(game)
 		{
 			Order = 0; // 最早
@@ -40,7 +47,7 @@ namespace Philosophyz
 			ServerApi.Hooks.GameInitialize.Register(this, OnInit);
 			ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
 			ServerApi.Hooks.NetGreetPlayer.Register(this, OnGreet);
-			ServerApi.Hooks.NetSendData.Register(this, OnSendData);
+			ServerApi.Hooks.NetSendData.Register(this, OnSendData, 8000);
 
 			RegionHooks.RegionEntered += OnRegionEntered;
 			RegionHooks.RegionLeft += OnRegionLeft;
@@ -67,7 +74,9 @@ namespace Philosophyz
 
 					foreach (var tsPlayer in TShock.Players.Where(p => p?.Active == true))
 					{
+						if (!InvokePreSendData(tsPlayer, args.remoteClient)) continue;
 						tsPlayer.SendRawData(tsPlayer.GetData<bool>(InRegion) ? onData : offData);
+						InvokePostSendData(tsPlayer, args.remoteClient);
 					}
 
 					args.Handled = true;
@@ -75,12 +84,13 @@ namespace Philosophyz
 			}
 			else
 			{
+				if (!InvokePreSendData(player, args.remoteClient)) return;
 				// 如果在区域内，收到了来自别的插件的发送请求
 				// 保持默认 ssc = true 并发送(也就是不需要改什么)
 				// 如果在区域外，收到了来自别的插件的发送请求
 				// 需要 fake ssc = false 并发送
 				SendInfo(player, player.GetData<bool>(InRegion));
-
+				InvokePostSendData(player, args.remoteClient);
 				args.Handled = true;
 			}
 		}
@@ -599,6 +609,19 @@ namespace Philosophyz
 			Change(player, data);
 
 			player.SetData(InRegion, true);
+		}
+
+		private static bool InvokePreSendData(TSPlayer player, int remoteClient)
+		{
+			var sd = PreSendData;
+			var hookResult = sd != null ? new HookResult?(sd(player, remoteClient)) : null;
+			return hookResult == HookResult.Continue;
+		}
+
+		private static void InvokePostSendData(TSPlayer player, int remoteClient)
+		{
+			var sd = PostSendData;
+			sd?.Invoke(player, remoteClient);
 		}
 	}
 }
