@@ -15,7 +15,7 @@ namespace Philosophyz
 	[ApiVersion(2, 0)]
 	public class Philosophyz : TerrariaPlugin
 	{
-		public delegate HookResult PzSendData(TSPlayer player, int remoteClient);
+		public delegate HookResult PzSendData(TSPlayer player, bool allMsg);
 
 		private const string BypassStatus = "pz-bp";
 
@@ -74,9 +74,9 @@ namespace Philosophyz
 
 					foreach (var tsPlayer in TShock.Players.Where(p => p?.Active == true))
 					{
-						if (!InvokePreSendData(tsPlayer, args.remoteClient)) continue;
+						if (!InvokePreSendData(tsPlayer, true)) continue;
 						tsPlayer.SendRawData(tsPlayer.GetData<bool>(InRegion) ? onData : offData);
-						InvokePostSendData(tsPlayer, args.remoteClient);
+						InvokePostSendData(tsPlayer, true);
 					}
 
 					args.Handled = true;
@@ -84,13 +84,12 @@ namespace Philosophyz
 			}
 			else
 			{
-				if (!InvokePreSendData(player, args.remoteClient)) return;
 				// 如果在区域内，收到了来自别的插件的发送请求
 				// 保持默认 ssc = true 并发送(也就是不需要改什么)
 				// 如果在区域外，收到了来自别的插件的发送请求
 				// 需要 fake ssc = false 并发送
 				SendInfo(player, player.GetData<bool>(InRegion));
-				InvokePostSendData(player, args.remoteClient);
+
 				args.Handled = true;
 			}
 		}
@@ -185,7 +184,7 @@ namespace Philosophyz
 			data.CopyCharacter(args.Player);
 
 			args.Player.SetData(OriginData, data);
-			
+
 			Change(args.Player, region.GetDefaultData());
 			args.Player.SetData(InRegion, true); // 调换位置，因为发WorldInfo有判断
 		}
@@ -312,7 +311,7 @@ namespace Philosophyz
 					if (!PaginationTools.TryParsePageNumber(args.Parameters, 1, args.Player, out pageNumber))
 						return;
 					var names = from pz in PzRegions.PzRegions
-							select TShock.Regions.GetRegionByID(pz.Id).Name + ": " + string.Join(", ", pz.PlayerDatas.Keys);
+								select TShock.Regions.GetRegionByID(pz.Id).Name + ": " + string.Join(", ", pz.PlayerDatas.Keys);
 					PaginationTools.SendPage(args.Player, pageNumber, PaginationTools.BuildLinesFromTerms(names),
 						new PaginationTools.Settings
 						{
@@ -587,7 +586,9 @@ namespace Philosophyz
 
 		private static void SendInfo(TSPlayer player, bool ssc)
 		{
+			if (!InvokePreSendData(player)) return;
 			player.SendRawData(PackInfo(ssc));
+			InvokePostSendData(player);
 		}
 
 		/// <summary>
@@ -611,17 +612,17 @@ namespace Philosophyz
 			player.SetData(InRegion, true);
 		}
 
-		private static bool InvokePreSendData(TSPlayer player, int remoteClient)
+		private static bool InvokePreSendData(TSPlayer player, bool allMsg = false)
 		{
 			var sd = PreSendData;
-			var hookResult = sd != null ? new HookResult?(sd(player, remoteClient)) : null;
+			var hookResult = sd != null ? new HookResult?(sd(player, allMsg)) : null;
 			return hookResult == HookResult.Continue;
 		}
 
-		private static void InvokePostSendData(TSPlayer player, int remoteClient)
+		private static void InvokePostSendData(TSPlayer player, bool allMsg = false)
 		{
 			var sd = PostSendData;
-			sd?.Invoke(player, remoteClient);
+			sd?.Invoke(player, allMsg);
 		}
 	}
 }
