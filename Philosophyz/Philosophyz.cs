@@ -2,7 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using OTAPI;
+using Philosophyz.Hooks;
 using Terraria;
 using Terraria.GameContent.Events;
 using Terraria.Social;
@@ -15,8 +15,6 @@ namespace Philosophyz
 	[ApiVersion(2, 0)]
 	public class Philosophyz : TerrariaPlugin
 	{
-		public delegate HookResult PzSendData(TSPlayer player, bool allMsg);
-
 		private const string BypassStatus = "pz-bp";
 
 		public const string OriginData = "pz-pre-dt";
@@ -30,10 +28,6 @@ namespace Philosophyz
 		public override string Description => "Dark";
 
 		public override Version Version => Assembly.GetExecutingAssembly().GetName().Version;
-
-		public static PzSendData PreSendData;
-
-		public static PzSendData PostSendData;
 
 		public Philosophyz(Main game) : base(game)
 		{
@@ -54,6 +48,22 @@ namespace Philosophyz
 			RegionHooks.RegionDeleted += OnRegionDeleted;
 		}
 
+		protected override void Dispose(bool disposing)
+		{
+			if (disposing)
+			{
+				ServerApi.Hooks.GameInitialize.Deregister(this, OnInit);
+				ServerApi.Hooks.GamePostInitialize.Deregister(this, OnPostInit);
+				ServerApi.Hooks.NetGreetPlayer.Deregister(this, OnGreet);
+				ServerApi.Hooks.NetSendData.Deregister(this, OnSendData);
+
+				RegionHooks.RegionEntered -= OnRegionEntered;
+				RegionHooks.RegionLeft -= OnRegionLeft;
+				RegionHooks.RegionDeleted -= OnRegionDeleted;
+			}
+			base.Dispose(disposing);
+		}
+
 		/// <summary>
 		/// 根据worldinfo发送时的状态判定是否需要fakessc
 		/// </summary>
@@ -63,34 +73,34 @@ namespace Philosophyz
 			if (args.MsgId != PacketTypes.WorldInfo)
 				return;
 
-			var player = TShock.Players.ElementAtOrDefault(args.remoteClient);
-
-			if (player == null)
+			if (args.remoteClient == -1)
 			{
-				if (args.remoteClient == -1)
+				var onData = PackInfo(true);
+				var offData = PackInfo(false);
+
+				foreach (var tsPlayer in TShock.Players.Where(p => p?.Active == true))
 				{
-					var onData = PackInfo(true);
-					var offData = PackInfo(false);
-
-					foreach (var tsPlayer in TShock.Players.Where(p => p?.Active == true))
-					{
-						if (!InvokePreSendData(tsPlayer, true)) continue;
-						tsPlayer.SendRawData(tsPlayer.GetData<bool>(InRegion) ? onData : offData);
-						InvokePostSendData(tsPlayer, true);
-					}
-
-					args.Handled = true;
+					if (!SendDataHooks.InvokePreSendData(tsPlayer, true)) continue;
+					tsPlayer.SendRawData(tsPlayer.GetData<bool>(InRegion) ? onData : offData);
+					SendDataHooks.InvokePostSendData(tsPlayer, true);
 				}
+
+				args.Handled = true;
 			}
 			else
 			{
-				// 如果在区域内，收到了来自别的插件的发送请求
-				// 保持默认 ssc = true 并发送(也就是不需要改什么)
-				// 如果在区域外，收到了来自别的插件的发送请求
-				// 需要 fake ssc = false 并发送
-				SendInfo(player, player.GetData<bool>(InRegion));
+				var player = TShock.Players.ElementAtOrDefault(args.remoteClient);
 
-				args.Handled = true;
+				if (player != null)
+				{
+					// 如果在区域内，收到了来自别的插件的发送请求
+					// 保持默认 ssc = true 并发送(也就是不需要改什么)
+					// 如果在区域外，收到了来自别的插件的发送请求
+					// 需要 fake ssc = false 并发送
+					SendInfo(player, player.GetData<bool>(InRegion));
+
+					args.Handled = true;
+				}
 			}
 		}
 
@@ -114,6 +124,7 @@ namespace Philosophyz
 			if (!TShock.ServerSideCharacterConfig.Enabled)
 			{
 				TShock.Log.ConsoleError("[Pz] 未开启SSC! 你可能选错了插件.");
+				Dispose(true);
 				throw new NotSupportedException("该插件不支持非SSC模式运行!");
 			}
 
@@ -122,17 +133,6 @@ namespace Philosophyz
 			Commands.ChatCommands.Add(new Command("pz.select", PzSelect, "pzselect"));
 
 			PzRegions = new PzRegionManager(TShock.DB);
-		}
-
-		protected override void Dispose(bool disposing)
-		{
-			if (disposing)
-			{
-				RegionHooks.RegionEntered -= OnRegionEntered;
-				RegionHooks.RegionLeft -= OnRegionLeft;
-				RegionHooks.RegionDeleted -= OnRegionDeleted;
-			}
-			base.Dispose(disposing);
 		}
 
 		private void OnRegionDeleted(RegionHooks.RegionDeletedEventArgs args)
@@ -586,9 +586,9 @@ namespace Philosophyz
 
 		private static void SendInfo(TSPlayer player, bool ssc)
 		{
-			if (!InvokePreSendData(player)) return;
+			if (!SendDataHooks.InvokePreSendData(player)) return;
 			player.SendRawData(PackInfo(ssc));
-			InvokePostSendData(player);
+			SendDataHooks.InvokePostSendData(player);
 		}
 
 		/// <summary>
@@ -612,17 +612,6 @@ namespace Philosophyz
 			player.SetData(InRegion, true);
 		}
 
-		private static bool InvokePreSendData(TSPlayer player, bool allMsg = false)
-		{
-			var sd = PreSendData;
-			var hookResult = sd != null ? new HookResult?(sd(player, allMsg)) : null;
-			return hookResult == HookResult.Continue;
-		}
-
-		private static void InvokePostSendData(TSPlayer player, bool allMsg = false)
-		{
-			var sd = PostSendData;
-			sd?.Invoke(player, allMsg);
-		}
+		
 	}
 }
