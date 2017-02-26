@@ -160,7 +160,7 @@ namespace Philosophyz
 			if (!info.InSscRegion)
 				return;
 
-			Change(args.Player, info.OriginData);
+			ChangeCharacter(args.Player, info.OriginData);
 
 			info.InSscRegion = false;
 			info.FakeSscStatus = false;
@@ -187,7 +187,7 @@ namespace Philosophyz
 			info.SetBackupPlayerData();
 
 			if (region.HasDefault)
-				Change(args.Player, region.GetDefaultData());
+				ChangeCharacter(args.Player, region.GetDefaultData());
 		}
 
 		private static void ToggleBypass(CommandArgs args)
@@ -236,7 +236,7 @@ namespace Philosophyz
 				return;
 			}
 
-			Change(args.Player, data);
+			ChangeCharacter(args.Player, data);
 			args.Player.SendInfoMessage("当前人物切换为: {0}", select);
 		}
 
@@ -441,7 +441,7 @@ namespace Philosophyz
 			}
 		}
 
-		private static void Change(TSPlayer player, PlayerData data)
+		public static void ChangeCharacter(TSPlayer player, PlayerData data)
 		{
 			data.RestoreCharacter(player);
 		}
