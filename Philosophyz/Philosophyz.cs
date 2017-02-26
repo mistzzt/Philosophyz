@@ -49,7 +49,7 @@ namespace Philosophyz
 
 		private HookResult OnOtapiSendData(ref int bufferId, ref int msgType, ref int remoteClient, ref int ignoreClient, ref string text, ref int number, ref float number2, ref float number3, ref float number4, ref int number5, ref int number6, ref int number7)
 		{
-			if (msgType != (int) PacketTypes.WorldInfo)
+			if (msgType != (int)PacketTypes.WorldInfo)
 			{
 				return _tsapiHandler(ref bufferId, ref msgType, ref remoteClient, ref ignoreClient, ref text, ref number, ref number2, ref number3, ref number4, ref number5, ref number6, ref number7);
 			}
@@ -160,7 +160,7 @@ namespace Philosophyz
 			if (!info.InSscRegion)
 				return;
 
-			ChangeCharacter(args.Player, info.OriginData);
+			info.RestoreCharacter();
 
 			info.InSscRegion = false;
 			info.FakeSscStatus = false;
@@ -187,7 +187,7 @@ namespace Philosophyz
 			info.SetBackupPlayerData();
 
 			if (region.HasDefault)
-				ChangeCharacter(args.Player, region.GetDefaultData());
+				PlayerInfo.GetPlayerInfo(args.Player).ChangeCharacter(region.GetDefaultData());
 		}
 
 		private static void ToggleBypass(CommandArgs args)
@@ -236,7 +236,7 @@ namespace Philosophyz
 				return;
 			}
 
-			ChangeCharacter(args.Player, data);
+			PlayerInfo.GetPlayerInfo(args.Player).ChangeCharacter(data);
 			args.Player.SendInfoMessage("当前人物切换为: {0}", select);
 		}
 
@@ -441,11 +441,6 @@ namespace Philosophyz
 			}
 		}
 
-		public static void ChangeCharacter(TSPlayer player, PlayerData data)
-		{
-			data.RestoreCharacter(player);
-		}
-
 		private static byte[] PackInfo(bool ssc)
 		{
 			var memoryStream = new MemoryStream();
@@ -580,7 +575,7 @@ namespace Philosophyz
 
 			Main.ServerSideCharacter = ssc;
 
-			NetMessage.SendDataDirect((int) PacketTypes.WorldInfo, player.Index);
+			NetMessage.SendDataDirect((int)PacketTypes.WorldInfo, player.Index);
 
 			if (Main.ServerSideCharacter)
 				Main.ServerSideCharacter = true;
