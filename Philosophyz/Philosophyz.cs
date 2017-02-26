@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using OTAPI;
 using Philosophyz.Hooks;
 using Terraria;
 using Terraria.GameContent.Events;
@@ -15,12 +16,6 @@ namespace Philosophyz
 	[ApiVersion(2, 0)]
 	public class Philosophyz : TerrariaPlugin
 	{
-		private const string BypassStatus = "pz-bp";
-
-		public const string OriginData = "pz-pre-dt";
-
-		public const string InRegion = "pz-in-reg";
-
 		public override string Name => Assembly.GetExecutingAssembly().GetName().Name;
 
 		public override string Author => "MistZZT";
@@ -36,16 +31,65 @@ namespace Philosophyz
 
 		internal PzRegionManager PzRegions;
 
+		private OTAPI.Hooks.Net.SendDataHandler _tsapiHandler;
+
 		public override void Initialize()
 		{
 			ServerApi.Hooks.GameInitialize.Register(this, OnInit);
 			ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
 			ServerApi.Hooks.NetGreetPlayer.Register(this, OnGreet);
-			ServerApi.Hooks.NetSendData.Register(this, OnSendData, 8000);
 
 			RegionHooks.RegionEntered += OnRegionEntered;
 			RegionHooks.RegionLeft += OnRegionLeft;
 			RegionHooks.RegionDeleted += OnRegionDeleted;
+
+			_tsapiHandler = OTAPI.Hooks.Net.SendData;
+			OTAPI.Hooks.Net.SendData = OnOtapiSendData;
+		}
+
+		private HookResult OnOtapiSendData(ref int bufferId, ref int msgType, ref int remoteClient, ref int ignoreClient, ref string text, ref int number, ref float number2, ref float number3, ref float number4, ref int number5, ref int number6, ref int number7)
+		{
+			if (msgType != (int) PacketTypes.WorldInfo)
+			{
+				return _tsapiHandler(ref bufferId, ref msgType, ref remoteClient, ref ignoreClient, ref text, ref number, ref number2, ref number3, ref number4, ref number5, ref number6, ref number7);
+			}
+
+			if (remoteClient == -1)
+			{
+				var onData = PackInfo(true);
+				var offData = PackInfo(false);
+
+				foreach (var tsPlayer in TShock.Players.Where(p => p?.Active == true))
+				{
+					if (!SendDataHooks.InvokePreSendData(tsPlayer, true)) continue;
+					try
+					{
+						tsPlayer.SendRawData(PlayerInfo.GetPlayerInfo(tsPlayer).InSscRegion ? onData : offData);
+					}
+					catch (Exception ex)
+					{
+						TShock.Log.Error(ex.ToString());
+					}
+					SendDataHooks.InvokePostSendData(tsPlayer, true);
+				}
+			}
+			else
+			{
+				var player = TShock.Players.ElementAtOrDefault(remoteClient);
+
+				var info = PlayerInfo.GetPlayerInfo(player);
+
+				if (player != null)
+				{
+					// 如果在区域内，收到了来自别的插件的发送请求
+					// 保持默认 ssc = true 并发送(也就是不需要改什么)
+					// 如果在区域外，收到了来自别的插件的发送请求
+					// 需要 fake ssc = false 并发送
+					SendInfo(player, info.InSscRegion);
+				}
+			}
+
+			return HookResult.Cancel;
 		}
 
 		protected override void Dispose(bool disposing)
@@ -55,53 +99,14 @@ namespace Philosophyz
 				ServerApi.Hooks.GameInitialize.Deregister(this, OnInit);
 				ServerApi.Hooks.GamePostInitialize.Deregister(this, OnPostInit);
 				ServerApi.Hooks.NetGreetPlayer.Deregister(this, OnGreet);
-				ServerApi.Hooks.NetSendData.Deregister(this, OnSendData);
 
 				RegionHooks.RegionEntered -= OnRegionEntered;
 				RegionHooks.RegionLeft -= OnRegionLeft;
 				RegionHooks.RegionDeleted -= OnRegionDeleted;
+
+				OTAPI.Hooks.Net.SendData = _tsapiHandler;
 			}
 			base.Dispose(disposing);
-		}
-
-		/// <summary>
-		/// 根据worldinfo发送时的状态判定是否需要fakessc
-		/// </summary>
-		/// <param name="args"></param>
-		private static void OnSendData(SendDataEventArgs args)
-		{
-			if (args.MsgId != PacketTypes.WorldInfo)
-				return;
-
-			if (args.remoteClient == -1)
-			{
-				var onData = PackInfo(true);
-				var offData = PackInfo(false);
-
-				foreach (var tsPlayer in TShock.Players.Where(p => p?.Active == true))
-				{
-					if (!SendDataHooks.InvokePreSendData(tsPlayer, true)) continue;
-					tsPlayer.SendRawData(tsPlayer.GetData<bool>(InRegion) ? onData : offData);
-					SendDataHooks.InvokePostSendData(tsPlayer, true);
-				}
-
-				args.Handled = true;
-			}
-			else
-			{
-				var player = TShock.Players.ElementAtOrDefault(args.remoteClient);
-
-				if (player != null)
-				{
-					// 如果在区域内，收到了来自别的插件的发送请求
-					// 保持默认 ssc = true 并发送(也就是不需要改什么)
-					// 如果在区域外，收到了来自别的插件的发送请求
-					// 需要 fake ssc = false 并发送
-					SendInfo(player, player.GetData<bool>(InRegion));
-
-					args.Handled = true;
-				}
-			}
 		}
 
 		private static void OnGreet(GreetPlayerEventArgs args)
@@ -110,8 +115,7 @@ namespace Philosophyz
 			if (player == null)
 				return;
 
-			player.SetData(BypassStatus, false);
-			SendInfo(player, false);
+			PlayerInfo.GetPlayerInfo(player);
 		}
 
 		private void OnPostInit(EventArgs args)
@@ -152,13 +156,14 @@ namespace Philosophyz
 			if (!PzRegions.PzRegions.Exists(p => p.Id == args.Region.ID))
 				return;
 
-			if (!args.Player.GetData<bool>(InRegion))
+			var info = PlayerInfo.GetPlayerInfo(args.Player);
+			if (!info.InSscRegion)
 				return;
 
-			Change(args.Player, args.Player.GetData<PlayerData>(OriginData));
-			args.Player.SetData(InRegion, false);
+			Change(args.Player, info.OriginData);
 
-			SendInfo(args.Player, false);
+			info.InSscRegion = false;
+			info.FakeSscStatus = false;
 		}
 
 		/// <summary>
@@ -172,30 +177,26 @@ namespace Philosophyz
 			if (region == null)
 				return;
 
-			if (args.Player.GetData<bool>(BypassStatus))
+			var info = PlayerInfo.GetPlayerInfo(args.Player);
+			if (info.BypassChange)
 				return;
 
-			SendInfo(args.Player, true); // 若有指令变换存档
+			info.FakeSscStatus = true;
+			info.InSscRegion = true;
 
-			if (!region.HasDefault)
-				return;
+			info.SetBackupPlayerData();
 
-			var data = new PlayerData(args.Player);
-			data.CopyCharacter(args.Player);
-
-			args.Player.SetData(OriginData, data);
-
-			Change(args.Player, region.GetDefaultData());
-			args.Player.SetData(InRegion, true); // 调换位置，因为发WorldInfo有判断
+			if (region.HasDefault)
+				Change(args.Player, region.GetDefaultData());
 		}
 
 		private static void ToggleBypass(CommandArgs args)
 		{
-			var current = args.Player.GetData<bool>(BypassStatus);
+			var info = PlayerInfo.GetPlayerInfo(args.Player);
 
-			args.Player.SetData(BypassStatus, !current);
+			info.BypassChange = !info.BypassChange;
 
-			args.Player.SendSuccessMessage("调整跳过装备更换模式为{0}.", current ? "关闭" : "开启");
+			args.Player.SendSuccessMessage("调整跳过装备更换模式为{0}.", info.BypassChange ? "关闭" : "开启");
 		}
 
 		private void PzSelect(CommandArgs args)
@@ -235,18 +236,7 @@ namespace Philosophyz
 				return;
 			}
 
-			if (!args.Player.GetData<bool>(InRegion)) // 是否备份存档判断
-			{
-				var origin = new PlayerData(args.Player);
-				origin.CopyCharacter(args.Player);
-
-				args.Player.SetData(OriginData, origin);
-			}
-
 			Change(args.Player, data);
-
-			args.Player.SetData(InRegion, true);
-
 			args.Player.SendInfoMessage("当前人物切换为: {0}", select);
 		}
 
@@ -456,10 +446,6 @@ namespace Philosophyz
 			data.RestoreCharacter(player);
 		}
 
-		/// <summary>
-		/// ssc状态写入
-		/// </summary>
-		/// <param name="ssc">状态</param>
 		private static byte[] PackInfo(bool ssc)
 		{
 			var memoryStream = new MemoryStream();
@@ -584,34 +570,22 @@ namespace Philosophyz
 			return data;
 		}
 
-		private static void SendInfo(TSPlayer player, bool ssc)
+		internal static void SendInfo(TSPlayer player, bool ssc)
 		{
-			if (!SendDataHooks.InvokePreSendData(player)) return;
-			player.SendRawData(PackInfo(ssc));
+			if (!SendDataHooks.InvokePreSendData(player))
+				return;
+
+			if (player.RealPlayer && !player.ConnectionAlive)
+				return;
+
+			Main.ServerSideCharacter = ssc;
+
+			NetMessage.SendDataDirect((int) PacketTypes.WorldInfo, player.Index);
+
+			if (Main.ServerSideCharacter)
+				Main.ServerSideCharacter = true;
+
 			SendDataHooks.InvokePostSendData(player);
 		}
-
-		/// <summary>
-		/// 变换存档
-		/// 需要区域被设定。这也就是说，ssc是开着的
-		/// </summary>
-		/// <param name="player">玩家引用</param>
-		/// <param name="data">存档信息</param>
-		public static void ChangeCharacter(TSPlayer player, PlayerData data)
-		{
-			if (!player.GetData<bool>(InRegion)) // 是否备份存档判断
-			{
-				var origin = new PlayerData(player);
-				origin.CopyCharacter(player);
-
-				player.SetData(OriginData, origin);
-			}
-
-			Change(player, data);
-
-			player.SetData(InRegion, true);
-		}
-
-		
 	}
 }

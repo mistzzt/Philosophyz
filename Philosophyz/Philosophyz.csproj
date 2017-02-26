@@ -50,9 +50,9 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Change.cs" />
     <Compile Include="Hooks\SendDataHooks.cs" />
     <Compile Include="Philosophyz.cs" />
+    <Compile Include="PlayerInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="PzRegionManager.cs" />
   </ItemGroup>
