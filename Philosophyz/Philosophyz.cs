@@ -577,8 +577,7 @@ namespace Philosophyz
 
 			NetMessage.SendDataDirect((int)PacketTypes.WorldInfo, player.Index);
 
-			if (Main.ServerSideCharacter)
-				Main.ServerSideCharacter = true;
+			Main.ServerSideCharacter = true;
 
 			SendDataHooks.InvokePostSendData(player);
 		}
