@@ -66,9 +66,9 @@ namespace Philosophyz
 					{
 						tsPlayer.SendRawData(PlayerInfo.GetPlayerInfo(tsPlayer).InSscRegion ? onData : offData);
 					}
-					catch (Exception ex)
+					catch
 					{
-						TShock.Log.Error(ex.ToString());
+						// ignored
 					}
 					SendDataHooks.InvokePostSendData(tsPlayer, true);
 				}
