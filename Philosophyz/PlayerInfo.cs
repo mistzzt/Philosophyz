@@ -1,5 +1,6 @@
 ﻿using System;
 using Terraria;
+using Terraria.Localization;
 using TShockAPI;
 
 namespace Philosophyz
@@ -14,7 +15,7 @@ namespace Philosophyz
 
 		public bool? FakeSscStatus
 		{
-			get { return _fakeSscStatus; }
+			get => _fakeSscStatus;
 			internal set
 			{
 				if (value == _fakeSscStatus)
@@ -65,8 +66,8 @@ namespace Philosophyz
 				_player.TPlayer.inventory[slot].prefix = prefix;
 			}
 			
-			NetMessage.SendData(5, -1, -1, Main.player[_player.Index].inventory[slot].name, _player.Index, slot, Main.player[_player.Index].inventory[slot].prefix);
-			NetMessage.SendData(5, _player.Index, -1, Main.player[_player.Index].inventory[slot].name, _player.Index, slot, Main.player[_player.Index].inventory[slot].prefix);
+			NetMessage.SendData(5, -1, -1, NetworkText.FromLiteral(Main.player[_player.Index].inventory[slot].Name), _player.Index, slot, Main.player[_player.Index].inventory[slot].prefix);
+			NetMessage.SendData(5, _player.Index, -1, NetworkText.FromLiteral(Main.player[_player.Index].inventory[slot].Name), _player.Index, slot, Main.player[_player.Index].inventory[slot].prefix);
 		}
 
 		public void ChangeInventory(NetItem[] items)
@@ -91,12 +92,12 @@ namespace Philosophyz
 
 			for (var k = 0; k < NetItem.InventorySlots; k++)
 			{
-				NetMessage.SendData(5, -1, -1, Main.player[_player.Index].inventory[k].name, _player.Index, k, Main.player[_player.Index].inventory[k].prefix);
+				NetMessage.SendData(5, -1, -1, NetworkText.FromLiteral(Main.player[_player.Index].inventory[k].Name), _player.Index, k, Main.player[_player.Index].inventory[k].prefix);
 			}
 
 			for (var k = 0; k < NetItem.InventorySlots; k++)
 			{
-				NetMessage.SendData(5, _player.Index, -1, Main.player[_player.Index].inventory[k].name, _player.Index, k, Main.player[_player.Index].inventory[k].prefix);
+				NetMessage.SendData(5, _player.Index, -1, NetworkText.FromLiteral(Main.player[_player.Index].inventory[k].Name), _player.Index, k, Main.player[_player.Index].inventory[k].prefix);
 			}
 		}
 

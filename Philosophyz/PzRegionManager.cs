@@ -37,8 +37,7 @@ namespace Philosophyz
 			if (!HasDefault)
 				return null;
 
-			PlayerData r;
-			return !PlayerDatas.TryGetValue(Default, out r) ? null : r;
+			return !PlayerDatas.TryGetValue(Default, out PlayerData r) ? null : r;
 		}
 	}
 

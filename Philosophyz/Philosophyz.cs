@@ -6,6 +6,7 @@ using OTAPI;
 using Philosophyz.Hooks;
 using Terraria;
 using Terraria.GameContent.Events;
+using Terraria.Localization;
 using Terraria.Social;
 using TerrariaApi.Server;
 using TShockAPI;
@@ -13,7 +14,7 @@ using TShockAPI.Hooks;
 
 namespace Philosophyz
 {
-	[ApiVersion(2, 0)]
+	[ApiVersion(2, 1)]
 	public class Philosophyz : TerrariaPlugin
 	{
 		public override string Name => Assembly.GetExecutingAssembly().GetName().Name;
@@ -47,7 +48,7 @@ namespace Philosophyz
 			OTAPI.Hooks.Net.SendData = OnOtapiSendData;
 		}
 
-		private HookResult OnOtapiSendData(ref int bufferId, ref int msgType, ref int remoteClient, ref int ignoreClient, ref string text, ref int number, ref float number2, ref float number3, ref float number4, ref int number5, ref int number6, ref int number7)
+		private HookResult OnOtapiSendData(ref int bufferId, ref int msgType, ref int remoteClient, ref int ignoreClient, ref NetworkText text, ref int number, ref float number2, ref float number3, ref float number4, ref int number5, ref int number6, ref int number7)
 		{
 			if (msgType != (int)PacketTypes.WorldInfo)
 			{
@@ -132,9 +133,9 @@ namespace Philosophyz
 				throw new NotSupportedException("该插件不支持非SSC模式运行!");
 			}
 
-			Commands.ChatCommands.Add(new Command("pz.admin.manage", PzCmd, "pz"));
-			Commands.ChatCommands.Add(new Command("pz.admin.toggle", ToggleBypass, "pztoggle"));
-			Commands.ChatCommands.Add(new Command("pz.select", PzSelect, "pzselect"));
+			Commands.ChatCommands.Add(new Command("pz.admin.manage", PzCmd, "pz") { AllowServer = false });
+			Commands.ChatCommands.Add(new Command("pz.admin.toggle", ToggleBypass, "pztoggle") { AllowServer = false });
+			Commands.ChatCommands.Add(new Command("pz.select", PzSelect, "pzselect") { AllowServer = false });
 
 			PzRegions = new PzRegionManager(TShock.DB);
 		}
@@ -201,20 +202,12 @@ namespace Philosophyz
 
 		private void PzSelect(CommandArgs args)
 		{
-			var pwd = args.Parameters.Count == 0 ? "WOSHIJIADE" : args.Parameters[0];
-			var select = args.Parameters.ElementAtOrDefault(1);
-
-			if (pwd.Equals("WOSHIJIADE", StringComparison.InvariantCulture))
+			if (args.Parameters.Count == 0)
 			{
-				args.Player.SendInfoMessage("你可能是输入了假指令!");
-				return;
+				args.Player.SendErrorMessage("参数错误！正确用法：/pzselect <存档名>");
 			}
 
-			if (!pwd.Equals("sjdUdfji23431,.32131243RNVj", StringComparison.InvariantCulture))
-			{
-				args.Player.SendInfoMessage("你可能是用了假指令!");
-				return;
-			}
+			args.Parameters.RemoveAll(s => s.Equals("sjdUdfji23431,.32131243RNVj", StringComparison.Ordinal));
 
 			if (args.Player.CurrentRegion == null)
 			{
@@ -229,15 +222,16 @@ namespace Philosophyz
 				return;
 			}
 
-			PlayerData data;
-			if (string.IsNullOrWhiteSpace(select) || !region.PlayerDatas.TryGetValue(select, out data))
+			var name = string.Join(" ", args.Parameters);
+
+			if (!region.PlayerDatas.TryGetValue(name, out PlayerData data))
 			{
 				args.Player.SendInfoMessage("你可能做了假选择!");
 				return;
 			}
 
 			PlayerInfo.GetPlayerInfo(args.Player).ChangeCharacter(data);
-			args.Player.SendInfoMessage("当前人物切换为: {0}", select);
+			args.Player.SendInfoMessage("当前人物切换为: {0}", name);
 		}
 
 		private void PzCmd(CommandArgs args)
