@@ -207,18 +207,16 @@ namespace Philosophyz
 				args.Player.SendErrorMessage("参数错误！正确用法：/pzselect <存档名>");
 			}
 
-			args.Parameters.RemoveAll(s => s.Equals("sjdUdfji23431,.32131243RNVj", StringComparison.Ordinal));
-
 			if (args.Player.CurrentRegion == null)
 			{
-				args.Player.SendInfoMessage("你可能在假地球上!");
+				args.Player.SendInfoMessage("区域无效。");
 				return;
 			}
 
 			var region = PzRegions.GetRegionById(args.Player.CurrentRegion.ID);
 			if (region == null)
 			{
-				args.Player.SendInfoMessage("你可能在假地方!");
+				args.Player.SendInfoMessage("区域无效。");
 				return;
 			}
 
@@ -226,12 +224,12 @@ namespace Philosophyz
 
 			if (!region.PlayerDatas.TryGetValue(name, out PlayerData data))
 			{
-				args.Player.SendInfoMessage("你可能做了假选择!");
+				args.Player.SendInfoMessage("未找到对应存档名。");
 				return;
 			}
 
 			PlayerInfo.GetPlayerInfo(args.Player).ChangeCharacter(data);
-			args.Player.SendInfoMessage("当前人物切换为: {0}", name);
+			args.Player.SendInfoMessage("你的人物存档被切换为{0}。", name);
 		}
 
 		private void PzCmd(CommandArgs args)
