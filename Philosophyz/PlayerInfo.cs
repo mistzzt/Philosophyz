@@ -20,7 +20,7 @@ namespace Philosophyz
 			{
 				if (value == _fakeSscStatus)
 					return;
-				Philosophyz.SendInfo(_player, value ?? Main.ServerSideCharacter);
+				Philosophyz.SendInfo(_player.Index, value ?? Main.ServerSideCharacter);
 				_fakeSscStatus = value;
 			}
 		}

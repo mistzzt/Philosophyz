@@ -38,7 +38,6 @@ namespace Philosophyz
 		{
 			ServerApi.Hooks.GameInitialize.Register(this, OnInit);
 			ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
-			ServerApi.Hooks.NetGreetPlayer.Register(this, OnGreet);
 
 			RegionHooks.RegionEntered += OnRegionEntered;
 			RegionHooks.RegionLeft += OnRegionLeft;
@@ -62,7 +61,7 @@ namespace Philosophyz
 
 				foreach (var tsPlayer in TShock.Players.Where(p => p?.Active == true))
 				{
-					if (!SendDataHooks.InvokePreSendData(tsPlayer, true)) continue;
+					if (!SendDataHooks.InvokePreSendData(remoteClient, tsPlayer.Index)) continue;
 					try
 					{
 						tsPlayer.SendRawData(PlayerInfo.GetPlayerInfo(tsPlayer).InSscRegion ? onData : offData);
@@ -71,22 +70,27 @@ namespace Philosophyz
 					{
 						// ignored
 					}
-					SendDataHooks.InvokePostSendData(tsPlayer, true);
+					SendDataHooks.InvokePostSendData(remoteClient, tsPlayer.Index);
 				}
 			}
 			else
 			{
 				var player = TShock.Players.ElementAtOrDefault(remoteClient);
 
-				var info = PlayerInfo.GetPlayerInfo(player);
-
 				if (player != null)
 				{
-					// 如果在区域内，收到了来自别的插件的发送请求
-					// 保持默认 ssc = true 并发送(也就是不需要改什么)
-					// 如果在区域外，收到了来自别的插件的发送请求
-					// 需要 fake ssc = false 并发送
-					SendInfo(player, info.InSscRegion);
+					var info = PlayerInfo.GetPlayerInfo(player);
+
+					/* 如果在区域内，收到了来自别的插件的发送请求
+					 * 保持默认 ssc = true 并发送(也就是不需要改什么)
+					 * 如果在区域外，收到了来自别的插件的发送请求
+					 * 需要 fake ssc = false 并发送
+					 */
+					SendInfo(remoteClient, info.InSscRegion);
+				}
+				else
+				{
+					SendInfo(remoteClient, false);
 				}
 			}
 
@@ -99,7 +103,6 @@ namespace Philosophyz
 			{
 				ServerApi.Hooks.GameInitialize.Deregister(this, OnInit);
 				ServerApi.Hooks.GamePostInitialize.Deregister(this, OnPostInit);
-				ServerApi.Hooks.NetGreetPlayer.Deregister(this, OnGreet);
 
 				RegionHooks.RegionEntered -= OnRegionEntered;
 				RegionHooks.RegionLeft -= OnRegionLeft;
@@ -108,15 +111,6 @@ namespace Philosophyz
 				OTAPI.Hooks.Net.SendData = _tsapiHandler;
 			}
 			base.Dispose(disposing);
-		}
-
-		private static void OnGreet(GreetPlayerEventArgs args)
-		{
-			var player = TShock.Players.ElementAtOrDefault(args.Who);
-			if (player == null)
-				return;
-
-			PlayerInfo.GetPlayerInfo(player);
 		}
 
 		private void OnPostInit(EventArgs args)
@@ -456,7 +450,8 @@ namespace Philosophyz
 			binaryWriter.Write((short)Main.rockLayer);
 			binaryWriter.Write(Main.worldID);
 			binaryWriter.Write(Main.worldName);
-			binaryWriter.Write(Main.ActiveWorldFileData.UniqueId.ToString());
+			binaryWriter.Write(Main.ActiveWorldFileData.UniqueId.ToByteArray());
+			binaryWriter.Write(Main.ActiveWorldFileData.WorldGeneratorVersion);
 			binaryWriter.Write((byte)Main.moonType);
 			binaryWriter.Write((byte)WorldGen.treeBG);
 			binaryWriter.Write((byte)WorldGen.corruptBG);
@@ -557,21 +552,18 @@ namespace Philosophyz
 			return data;
 		}
 
-		internal static void SendInfo(TSPlayer player, bool ssc)
+		internal static void SendInfo(int remoteClient, bool ssc)
 		{
-			if (!SendDataHooks.InvokePreSendData(player))
-				return;
-
-			if (player.RealPlayer && !player.ConnectionAlive)
+			if (!SendDataHooks.InvokePreSendData(remoteClient, remoteClient))
 				return;
 
 			Main.ServerSideCharacter = ssc;
 
-			NetMessage.SendDataDirect((int)PacketTypes.WorldInfo, player.Index);
+			NetMessage.SendDataDirect((int)PacketTypes.WorldInfo, remoteClient);
 
 			Main.ServerSideCharacter = true;
 
-			SendDataHooks.InvokePostSendData(player);
+			SendDataHooks.InvokePostSendData(remoteClient, remoteClient);
 		}
 	}
 }

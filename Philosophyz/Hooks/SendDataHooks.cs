@@ -1,27 +1,25 @@
 ﻿using OTAPI;
-using TShockAPI;
 
 namespace Philosophyz.Hooks
 {
 	public class SendDataHooks
 	{
-		public delegate HookResult PzSendData(TSPlayer player, bool allMsg);
+		public delegate HookResult PzSendData(int remoteClient, int index);
 
 		public static PzSendData PreSendData;
 
 		public static PzSendData PostSendData;
 
-		internal static bool InvokePreSendData(TSPlayer player, bool allMsg = false)
+		internal static bool InvokePreSendData(int remoteClient, int index)
 		{
 			var sd = PreSendData;
-			var hookResult = sd != null ? new HookResult?(sd(player, allMsg)) : null;
-			return hookResult == HookResult.Continue;
+			return sd?.Invoke(remoteClient, index) != HookResult.Cancel;
 		}
 
-		internal static void InvokePostSendData(TSPlayer player, bool allMsg = false)
+		internal static void InvokePostSendData(int remoteClient, int index)
 		{
 			var sd = PostSendData;
-			sd?.Invoke(player, allMsg);
+			sd?.Invoke(remoteClient, index);
 		}
 	}
 }
