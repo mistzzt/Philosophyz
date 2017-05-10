@@ -17,6 +17,8 @@ namespace Philosophyz
 	[ApiVersion(2, 1)]
 	public class Philosophyz : TerrariaPlugin
 	{
+		private const bool DefaultFakeSscStatus = false;
+
 		public override string Name => Assembly.GetExecutingAssembly().GetName().Name;
 
 		public override string Author => "MistZZT";
@@ -64,7 +66,7 @@ namespace Philosophyz
 					if (!SendDataHooks.InvokePreSendData(remoteClient, tsPlayer.Index)) continue;
 					try
 					{
-						tsPlayer.SendRawData(PlayerInfo.GetPlayerInfo(tsPlayer).InSscRegion ? onData : offData);
+						tsPlayer.SendRawData(PlayerInfo.GetPlayerInfo(tsPlayer).FakeSscStatus ?? DefaultFakeSscStatus ? onData : offData);
 					}
 					catch
 					{
@@ -86,11 +88,7 @@ namespace Philosophyz
 					 * 如果在区域外，收到了来自别的插件的发送请求
 					 * 需要 fake ssc = false 并发送
 					 */
-					SendInfo(remoteClient, info.InSscRegion);
-				}
-				else
-				{
-					SendInfo(remoteClient, false);
+					SendInfo(remoteClient, info.FakeSscStatus ?? DefaultFakeSscStatus);
 				}
 			}
 
@@ -152,9 +150,9 @@ namespace Philosophyz
 				return;
 
 			var info = PlayerInfo.GetPlayerInfo(args.Player);
-			if (!info.InSscRegion)
+			if (!info.InSscRegion || info.FakeSscStatus == false)
 				return;
-
+			
 			info.RestoreCharacter();
 
 			info.InSscRegion = false;
