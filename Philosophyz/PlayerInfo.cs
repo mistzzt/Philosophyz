@@ -25,6 +25,8 @@ namespace Philosophyz
 			}
 		}
 
+		internal TShockAPI.DB.Region CurrentRegion;
+
 		public bool InSscRegion { get; internal set; }
 
 		public bool BypassChange { get; internal set; }

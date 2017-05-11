@@ -19,6 +19,8 @@ namespace Philosophyz
 	{
 		private const bool DefaultFakeSscStatus = false;
 
+		private const double DefaultCheckTime = 1.5d;
+
 		public override string Name => Assembly.GetExecutingAssembly().GetName().Name;
 
 		public override string Author => "MistZZT";
@@ -40,13 +42,87 @@ namespace Philosophyz
 		{
 			ServerApi.Hooks.GameInitialize.Register(this, OnInit);
 			ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
+			ServerApi.Hooks.GameUpdate.Register(this, OnUpdate);
 
-			RegionHooks.RegionEntered += OnRegionEntered;
-			RegionHooks.RegionLeft += OnRegionLeft;
 			RegionHooks.RegionDeleted += OnRegionDeleted;
 
 			_tsapiHandler = OTAPI.Hooks.Net.SendData;
 			OTAPI.Hooks.Net.SendData = OnOtapiSendData;
+		}
+
+		protected override void Dispose(bool disposing)
+		{
+			if (disposing)
+			{
+				ServerApi.Hooks.GameInitialize.Deregister(this, OnInit);
+				ServerApi.Hooks.GamePostInitialize.Deregister(this, OnPostInit);
+
+				RegionHooks.RegionDeleted -= OnRegionDeleted;
+
+				OTAPI.Hooks.Net.SendData = _tsapiHandler;
+			}
+			base.Dispose(disposing);
+		}
+
+		private DateTime _lastCheck = DateTime.UtcNow;
+
+		private void OnUpdate(EventArgs args)
+		{
+			if ((DateTime.UtcNow - _lastCheck).TotalSeconds < DefaultCheckTime)
+			{
+				return;
+			}
+
+			foreach (var player in TShock.Players.Where(p => p?.Active == true))
+			{
+				var info = PlayerInfo.GetPlayerInfo(player);
+				var oldRegion = info.CurrentRegion;
+				info.CurrentRegion = TShock.Regions.GetTopRegion(TShock.Regions.InAreaRegion(player.TileX, player.TileY));
+
+				if (oldRegion == info.CurrentRegion)
+					continue;
+
+				var shouldInvokeLeave = true;
+
+				// 若是pz区域，则更换模式；不需要在离开区域时再次复原或保存备份。
+				if (info.CurrentRegion != null)
+				{
+					var region = PzRegions.GetRegionById(info.CurrentRegion.ID);
+
+					if (region != null)
+					{
+						if (!info.BypassChange)
+						{
+							info.FakeSscStatus = true;
+
+							if (!info.InSscRegion)
+							{
+								info.InSscRegion = true;
+								info.SetBackupPlayerData();
+							}
+
+							if (region.HasDefault)
+								info.ChangeCharacter(region.GetDefaultData());
+
+							shouldInvokeLeave = false;
+						}
+					}
+				}
+
+				// 如果从区域出去，且没有进入新pz区域，则恢复
+				if (shouldInvokeLeave && oldRegion != null)
+				{
+					if (!info.InSscRegion || info.FakeSscStatus == DefaultFakeSscStatus)
+						continue;
+
+					info.RestoreCharacter();
+
+					info.InSscRegion = false;
+					info.FakeSscStatus = false;
+				}
+			}
+
+			_lastCheck = DateTime.UtcNow;
 		}
 
 		private HookResult OnOtapiSendData(ref int bufferId, ref int msgType, ref int remoteClient, ref int ignoreClient, ref NetworkText text, ref int number, ref float number2, ref float number3, ref float number4, ref int number5, ref int number6, ref int number7)
@@ -95,22 +171,6 @@ namespace Philosophyz
 			return HookResult.Cancel;
 		}
 
-		protected override void Dispose(bool disposing)
-		{
-			if (disposing)
-			{
-				ServerApi.Hooks.GameInitialize.Deregister(this, OnInit);
-				ServerApi.Hooks.GamePostInitialize.Deregister(this, OnPostInit);
-
-				RegionHooks.RegionEntered -= OnRegionEntered;
-				RegionHooks.RegionLeft -= OnRegionLeft;
-				RegionHooks.RegionDeleted -= OnRegionDeleted;
-
-				OTAPI.Hooks.Net.SendData = _tsapiHandler;
-			}
-			base.Dispose(disposing);
-		}
-
 		private void OnPostInit(EventArgs args)
 		{
 			PzRegions.ReloadRegions();
@@ -140,56 +200,13 @@ namespace Philosophyz
 			PzRegions.RemoveRegion(args.Region.ID);
 		}
 
-		/// <summary>
-		/// 离开区域时执行恢复存档并fakessc=false
-		/// </summary>
-		/// <param name="args"></param>
-		private void OnRegionLeft(RegionHooks.RegionLeftEventArgs args)
-		{
-			if (!PzRegions.PzRegions.Exists(p => p.Id == args.Region.ID))
-				return;
-
-			var info = PlayerInfo.GetPlayerInfo(args.Player);
-			if (!info.InSscRegion || info.FakeSscStatus == false)
-				return;
-			
-			info.RestoreCharacter();
-
-			info.InSscRegion = false;
-			info.FakeSscStatus = false;
-		}
-
-		/// <summary>
-		/// 进入区域时fakessc=true
-		/// 若有默认存档则开始更换
-		/// </summary>
-		/// <param name="args"></param>
-		private void OnRegionEntered(RegionHooks.RegionEnteredEventArgs args)
-		{
-			var region = PzRegions.GetRegionById(args.Region.ID);
-			if (region == null)
-				return;
-
-			var info = PlayerInfo.GetPlayerInfo(args.Player);
-			if (info.BypassChange)
-				return;
-
-			info.FakeSscStatus = true;
-			info.InSscRegion = true;
-
-			info.SetBackupPlayerData();
-
-			if (region.HasDefault)
-				PlayerInfo.GetPlayerInfo(args.Player).ChangeCharacter(region.GetDefaultData());
-		}
-
 		private static void ToggleBypass(CommandArgs args)
 		{
 			var info = PlayerInfo.GetPlayerInfo(args.Player);
 
 			info.BypassChange = !info.BypassChange;
 
-			args.Player.SendSuccessMessage("调整跳过装备更换模式为{0}.", info.BypassChange ? "关闭" : "开启");
+			args.Player.SendSuccessMessage("{0}调整跳过装备更换模式。", info.BypassChange ? "关闭" : "开启");
 		}
 
 		private void PzSelect(CommandArgs args)
