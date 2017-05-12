@@ -55,7 +55,7 @@ namespace Philosophyz
 				return;
 			}
 
-			if (!InSscRegion) // 服务器现状为伪装无ssc并在区域内有ssc
+			if (FakeSscStatus != true) // 服务器现状为伪装无ssc并在区域内有ssc
 			{
 				return;
 			}
@@ -74,7 +74,7 @@ namespace Philosophyz
 
 		public void ChangeInventory(NetItem[] items)
 		{
-			if (!InSscRegion) // 服务器现状为伪装无ssc并在区域内有ssc
+			if (FakeSscStatus != true) // 服务器现状为伪装无ssc并在区域内有ssc
 			{
 				return;
 			}

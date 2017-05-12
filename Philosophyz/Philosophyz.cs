@@ -42,7 +42,7 @@ namespace Philosophyz
 		{
 			ServerApi.Hooks.GameInitialize.Register(this, OnInit);
 			ServerApi.Hooks.GamePostInitialize.Register(this, OnPostInit);
-			ServerApi.Hooks.GameUpdate.Register(this, OnUpdate);
+			ServerApi.Hooks.GameUpdate.Register(this, OnUpdate, 9000);
 
 			RegionHooks.RegionDeleted += OnRegionDeleted;
 

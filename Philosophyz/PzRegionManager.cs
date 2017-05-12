@@ -255,7 +255,7 @@ namespace Philosophyz
 
 			region.PlayerDatas.Remove(name);
 
-			if (region.Default.Equals(name, StringComparison.InvariantCulture))
+			if (string.Equals(name, region.Default, StringComparison.Ordinal))
 				SetDefaultCharacter(id, null);
 
 			try
