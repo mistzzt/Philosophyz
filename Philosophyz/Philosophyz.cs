@@ -274,7 +274,7 @@ namespace Philosophyz
 					TSPlayer player = null;
 					if (!string.IsNullOrWhiteSpace(playerName))
 					{
-						var players = TShock.Utils.FindPlayer(playerName);
+						var players = TSPlayer.FindByNameOrID(playerName);
 						if (players.Count == 0)
 						{
 							args.Player.SendErrorMessage("未找到玩家!");
@@ -282,7 +282,7 @@ namespace Philosophyz
 						}
 						if (players.Count > 1)
 						{
-							TShock.Utils.SendMultipleMatchError(args.Player, players.Select(p => p.Name));
+						    args.Player.SendMultipleMatchError(players.Select(p => p.Name));
 							return;
 						}
 						player = players[0];
